@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Navigation</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            max-width: 600px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (orientation: landscape) {
+            .container {
+                flex-direction: row;
+            }
+
+            .grid-container {
+                grid-template-columns: 300px 1fr;
+                max-width: 1200px;
+            }
+        }
+
+        .maze-visualization {
+            grid-column: 1;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            width: 100%;
+            max-width: 300px;
+            height: 300px; 
+        }
+
+        .info-display {
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @media (orientation: landscape) {
+            .info-display {
+                grid-column: 2;
+            }
+        }
+
+        .maze-cell {
+            fill: white;
+            stroke: #333;
+        }
+
+        .maze-cell.obstacle {
+            fill: #333;
+        }
+
+        .agent {
+            fill: #4CAF50;
+        }
+
+        #activation-display {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        #activation-display td,
+        #activation-display th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #activation-display th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        #activation-display td {
+            text-align: right;
+        }
+
+        h2 {
+            color: #2196F3;
+            margin-top: 0;
+        }
+
+        .info-item {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .simulation-info {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .simulation-info > div {
+            flex-basis: 48%;
+        }
+
+        #network-visualization-table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 12px;
+            table-layout: fixed;
+        }
+
+        #network-visualization-table td,
+        #network-visualization-table th {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        #network-visualization-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        #network-visualization-table .outgoing-weights {
+            white-space: normal;
+            text-align: left;
+        }
+
+        #output-history {
+            margin-top: 20px;
+        }
+
+        #output-history-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        #output-history-table td, 
+        #output-history-table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #output-history-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="grid-container">
+            <svg class="maze-visualization" id="maze-visualization"></svg>
+            <div class="info-display">
+                <h2>Simulation Information</h2>
+                <div class="simulation-info">
+                    <div>
+                        <p class="info-item">Time Step: <span id="time-step" class="info-value">0</span></p>
+                        <p class="info-item">Lap: <span id="lap-count" class="info-value">0</span></p>
+                    </div>
+                    <div>
+                        <p class="info-item">Right Fires: <span id="right-fires" class="info-value">0</span></p>
+                        <p class="info-item">Down Fires: <span id="down-fires" class="info-value">0</span></p>
+                    </div>
+                </div>
+                <div>
+                    <h3>Visualize Network Subset:</h3>
+                    <label for="start-input">Start Input:</label>
+                    <input type="number" id="start-input" value="0" min="0" max="8"><br>
+
+                    <label for="end-input">End Input:</label>
+                    <input type="number" id="end-input" value="8" min="0" max="8"><br>
+
+                    <label for="start-hidden">Start Hidden:</label>
+                    <input type="number" id="start-hidden" value="6" min="0" max="89"><br>
+
+                    <label for="end-hidden">End Hidden:</label>
+                    <input type="number" id="end-hidden" value="12" min="0" max="89"><br>
+
+                    <button id="visualize-button">Visualize</button>
+                </div>
+                <div id="activation-display"></div>
+                <div id="network-visualization"></div>
+            </div>
+            <div id="output-history">
+                <h2>Output History</h2>
+                <table id="output-history-table">
+                    <thead>
+                        <tr>
+                            <th>Lap</th>
+                            <th>Position</th>
+                            <th>Right</th>
+                            <th>Down</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody> 
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SNN Parameters
+        const numInputNeurons = 9;
+        const numHiddenNeurons = 90;
+        const numOutputNeurons = 2; // Changed to 2 outputs (Right, Down)
+        const minWeight = 0.1;
+        const maxWeight = 1.0;
+        const initialWeight = 0.95;
+        const inputThreshold = 0.5;
+        const outputThreshold = 1.25;
+        const decayFactor = 0.00; 
+        const weightStrengthening = 100.05; // Increased learning rate
+        const weightWeakening = 0.001;
+        
+        // Environment Parameters
+        const gridSize = 3;
+        const l = 0.001;
+        const initialMaze = [
+            [0, l, l],
+            [0, l, l],
+            [0, 0, 0]
+        ];
+
+        // SNN Initialization 
+        let inputNeurons = Array(numInputNeurons).fill(0);
+        let hiddenNeurons = Array(numHiddenNeurons).fill(0);
+        let outputNeurons = Array(numOutputNeurons).fill(0);
+
+        let inputHiddenWeights = Array.from({ length: numInputNeurons }, () =>
+            Array(numHiddenNeurons).fill(0) 
+        );
+
+        let hiddenOutputWeights = Array.from({ length: numHiddenNeurons }, () =>
+            Array(numOutputNeurons).fill(0) 
+        );
+
+        // Initialize connections with RANDOM weights
+        for (let i = 0; i < numInputNeurons; i++) {
+            for (let j = i * 10; j < (i + 1) * 10 && j < numHiddenNeurons; j++) {
+                inputHiddenWeights[i][j] = Math.random() * (maxWeight - minWeight) + minWeight;
+            }
+        }
+
+        for (let i = 0; i < numHiddenNeurons; i++) {
+            hiddenOutputWeights[i][i % numOutputNeurons] = Math.random() * (maxWeight - minWeight) + minWeight;
+        }
+
+        // Cumulative Activation Initialization
+        let inputHiddenCumulativeActivation = Array.from({ length: numInputNeurons }, () =>
+            Array(numHiddenNeurons).fill(0)
+        );
+        let hiddenOutputCumulativeActivation = Array.from({ length: numHiddenNeurons }, () =>
+            Array(numOutputNeurons).fill(0)
+        );
+
+        // Maze and Agent
+        let maze = JSON.parse(JSON.stringify(initialMaze));
+        let agentPosition = [0, 0];
+        let lapCount = 0;
+        let rightFires = 0;
+        let downFires = 0;
+
+        // Visualization Setup
+        const mazeSvg = d3.select("#maze-visualization");
+        const timeStepText = d3.select("#time-step");
+        const lapCountText = d3.select("#lap-count");
+        const rightFiresText = d3.select("#right-fires");
+        const downFiresText = d3.select("#down-fires");
+        const activationDisplay = d3.select("#activation-display");
+        const networkVisualization = d3.select("#network-visualization"); 
+
+        let timeStep = 0;
+
+        // SNN Functions
+        function updateInputNeurons(maze) {
+            for (let i = 0; i < numInputNeurons; i++) {
+                inputNeurons[i] += maze.flat()[i];
+            }
+
+            for (let i = 0; i < numInputNeurons; i++) {
+                if (inputNeurons[i] > inputThreshold) {
+                    for (let j = 0; j < numHiddenNeurons; j++) {
+                        if (inputHiddenWeights[i][j] !== 0) { 
+                            let activation = (inputNeurons[i] / 10) * inputHiddenWeights[i][j];
+                            hiddenNeurons[j] += activation;
+                            inputHiddenCumulativeActivation[i][j] += activation;
+                        }
+                    }
+                    inputNeurons[i] = 0;
+                }
+            }
+        }
+
+        function updateWeights() {
+            // Update input-hidden weights
+            for (let i = 0; i < numInputNeurons; i++) {
+                for (let j = 0; j < numHiddenNeurons; j++) {
+                    if (inputHiddenWeights[i][j] !== 0) { 
+                        if (hiddenNeurons[j] > inputThreshold) {
+                            let percentageContribution = inputHiddenCumulativeActivation[i][j] / hiddenNeurons[j];
+                            let weightChange = weightStrengthening * percentageContribution;
+                            inputHiddenWeights[i][j] = Math.min(maxWeight, inputHiddenWeights[i][j] + weightChange);
+                        } else {
+                            let weightChange = inputHiddenWeights[i][j] * weightWeakening;
+                            inputHiddenWeights[i][j] = Math.max(minWeight, inputHiddenWeights[i][j] - weightChange);
+                        }
+                        inputHiddenCumulativeActivation[i][j] = 0; // Reset cumulative activation
+                    }
+                }
+            }
+
+            // Update hidden-output weights
+            for (let i = 0; i < numHiddenNeurons; i++) {
+                for (let j = 0; j < numOutputNeurons; j++) {
+                    if (hiddenOutputWeights[i][j] !== 0) { 
+                        if (outputNeurons[j] > outputThreshold) {
+                            let percentageContribution = hiddenOutputCumulativeActivation[i][j] / outputNeurons[j];
+                            let weightChange = weightStrengthening * percentageContribution;
+                            hiddenOutputWeights[i][j] = Math.min(maxWeight, hiddenOutputWeights[i][j] + weightChange);
+                        } else {
+                            let weightChange = hiddenOutputWeights[i][j] * weightWeakening;
+                            hiddenOutputWeights[i][j] = Math.max(minWeight, hiddenOutputWeights[i][j] - weightChange);
+                        }
+                        hiddenOutputCumulativeActivation[i][j] = 0; // Reset cumulative activation
+                    }
+                }
+            }
+        }
+
+        function propagateActivation() {
+            for (let i = 0; i < numHiddenNeurons; i++) {
+                for (let j = 0; j < numOutputNeurons; j++) {
+                    if (hiddenOutputWeights[i][j] !== 0) { 
+                        if (hiddenNeurons[i] > inputThreshold) {
+                            let activation = (hiddenNeurons[i] / 10) * hiddenOutputWeights[i][j];
+                            outputNeurons[j] += activation;
+                            hiddenOutputCumulativeActivation[i][j] += activation;
+                        }
+                    }
+                }
+            }
+        }
+
+        function applyThresholdsAndReset() {
+            for (let i = 0; i < numHiddenNeurons; i++) {
+                if (hiddenNeurons[i] > inputThreshold) {
+                    hiddenNeurons[i] = 0;
+                }
+            }
+            for (let i = 0; i < numOutputNeurons; i++) {
+                if (outputNeurons[i] > outputThreshold) {
+                    outputNeurons[i] = 0; 
+                }
+            }
+        }
+
+        function applyDecay() {
+            for (let i = 0; i < numHiddenNeurons; i++) {
+                if (hiddenNeurons[i] <= inputThreshold) {
+                    hiddenNeurons[i] *= (1 - decayFactor);
+                }
+            }
+        }
+
+        // Environment Functions 
+        function isValidMove(newPosition) {
+            const [newRow, newCol] = newPosition;
+            return (
+                newRow >= 0 &&
+                newRow < gridSize &&
+                newCol >= 0 &&
+                newCol < gridSize &&
+                maze[newRow][newCol] === 0
+            );
+        }
+
+        function updateMaze(direction) {
+            if (agentPosition[0] === 2 && agentPosition[1] === 0) {
+                setTimeout(() => {  
+                    agentPosition = [0, 0];
+                    timeStep = 0;
+                    lapCount++;
+                    rightFires = 0; 
+                    downFires = 0; 
+                    resetActivations();
+                    updateMazeVisualization(); 
+                }, 500); 
+            }
+        }
+
+        function resetActivations() {
+            inputNeurons.fill(0);
+            hiddenNeurons.fill(0);
+            outputNeurons.fill(0);
+        }
+
+        // Visualization Functions
+        function visualizeMaze() {
+            const cellSize = 60;
+
+            mazeSvg.selectAll(".maze-cell")
+                .data(maze.flat())
+                .enter()
+                .append("rect")
+                .attr("class", "maze-cell")
+                .attr("x", (d, i) => (i % gridSize) * cellSize)
+                .attr("y", (d, i) => Math.floor(i / gridSize) * cellSize)
+                .attr("width", cellSize)
+                .attr("height", cellSize)
+                .classed("obstacle", d => d === l);
+
+            mazeSvg.append("circle")
+                .attr("class", "agent")
+                .attr("cx", agentPosition[1] * cellSize + cellSize / 2)
+                .attr("cy", agentPosition[0] * cellSize + cellSize / 2)
+                .attr("r", cellSize / 3);
+        }
+
+        function updateMazeVisualization() {
+            const cellSize = 60;
+            mazeSvg.select(".agent")
+                .attr("cx", agentPosition[1] * cellSize + cellSize / 2)
+                .attr("cy", agentPosition[0] * cellSize + cellSize / 2);
+
+            maze.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    if (rowIndex === agentPosition[0] && colIndex === agentPosition[1]) {
+                        maze[rowIndex][colIndex] = 1;
+                    } else if (cell === 1) {
+                        maze[rowIndex][colIndex] = 0;
+                    }
+                });
+            });
+        }
+
+        function displayActivations() {
+            activationDisplay.html("");
+            let tableHTML = "<h3>Neuron Activations</h3><table>";
+            tableHTML += "<tr><th>Input</th><th>Hidden</th><th>Output</th></tr>";
+            tableHTML += "<tr>";
+            tableHTML += "<td>" + inputNeurons.map(v => v.toFixed(4)).join("<br>") + "</td>";
+            tableHTML += "<td>" + hiddenNeurons.map(v => v.toFixed(4)).join("<br>") + "</td>";
+            tableHTML += "<td>" + outputNeurons.map(v => v.toFixed(4)).join("<br>") + "</td>";
+            tableHTML += "</tr></table>";
+            activationDisplay.html(tableHTML);
+        }
+
+        function visualizeNetworkSubset(startInput, endInput, startHidden, endHidden) {
+            let tableHTML = "<h3>Network Subset Visualization</h3><table id='network-visualization-table'>";
+            tableHTML += "<tr><th>Input Neuron</th><th>Hidden Neuron</th><th>Weight (I to H)</th><th>Outgoing Weights (H to O)</th></tr>";
+
+            for (let i = startInput; i <= endInput; i++) {
+                for (let j = startHidden; j <= endHidden; j++) {
+                    if (inputHiddenWeights[i][j] !== 0) { 
+                        tableHTML += "<tr>";
+                        tableHTML += `<td>I${i}</td><td>H${j}</td><td>${inputHiddenWeights[i][j].toFixed(3)}</td><td class='outgoing-weights'>`;
+
+                        for (let k = 0; k < numOutputNeurons; k++) {
+                            if (hiddenOutputWeights[j][k] !== 0) {
+                                tableHTML += `O${k}: ${hiddenOutputWeights[j][k].toFixed(3)}<br>`;
+                            }
+                        }
+                        tableHTML += "</td>";
+                        tableHTML += "</tr>";
+                    }
+                }
+            }
+
+            tableHTML += "</table>";
+            networkVisualization.html(tableHTML);
+        }
+
+        // Output History Table
+        const outputHistoryTable = d3.select("#output-history-table tbody");
+        let rightTimesteps = [];
+        let downTimesteps = [];
+        let lastPosition = [...agentPosition]; 
+
+        function addOutputHistoryRow() {
+            outputHistoryTable.append("tr")
+                .html(`
+                    <td>${lapCount}</td>
+                    <td>${lastPosition.join(', ')}</td>
+                    <td>${rightTimesteps.join(', ')}</td>
+                    <td>${downTimesteps.join(', ')}</td>
+                `);
+
+            rightTimesteps = [];
+            downTimesteps = []; 
+        }
+
+        // Main Simulation Loop
+        function simulate() {
+            updateInputNeurons(maze);
+            propagateActivation();
+
+            let firedOutputs = [];
+            let validMoveMade = false; 
+
+            for (let i = 0; i < numOutputNeurons; i++) {
+                if (outputNeurons[i] > outputThreshold) {
+                    firedOutputs.push(i);
+                    if (i === 0) { // Right
+                        rightFires++;
+                        rightTimesteps.push(timeStep);
+                    }
+                    if (i === 1) { // Down
+                        downFires++;
+                        downTimesteps.push(timeStep); 
+                    }
+                }
+            }
+
+            for (let outputIndex of firedOutputs) {
+                let originalPosition = [...agentPosition];
+                if (tryMove(outputIndex)) {
+                    validMoveMade = true; 
+                } else {
+                    agentPosition = originalPosition; 
+                }
+            }
+
+            // Update weights BEFORE resetting activations
+            updateWeights(); 
+
+            // Reset activations if a valid move was made 
+            if (validMoveMade) {
+                resetActivations();
+            }
+
+            updateMazeVisualization();
+            displayActivations();
+            applyThresholdsAndReset();
+            applyDecay();
+
+            timeStepText.text(timeStep);
+            lapCountText.text(lapCount);
+            rightFiresText.text(rightFires);
+            downFiresText.text(downFires);
+            timeStep++;
+
+            if (agentPosition[0] !== lastPosition[0] || agentPosition[1] !== lastPosition[1]) {
+                addOutputHistoryRow();
+                lastPosition = [...agentPosition]; 
+            }
+        }
+
+        function tryMove(direction) {
+            let newPosition = [...agentPosition];
+            switch (direction) {
+                case 0: // Right
+                    newPosition[1] += 1;
+                    break;
+                case 1: // Down
+                    newPosition[0] += 1;
+                    break;
+            }
+
+            if (isValidMove(newPosition)) {
+                agentPosition = newPosition;
+                updateMaze(direction);
+                return true;
+            }
+            return false;
+        }
+
+        // Initialize Visualizations
+        visualizeMaze();
+        updateMazeVisualization();
+        displayActivations();
+
+        // Event Listener for Visualization Button
+        document.getElementById('visualize-button').addEventListener('click', () => {
+            const startInput = parseInt(document.getElementById('start-input').value);
+            const endInput = parseInt(document.getElementById('end-input').value);
+            const startHidden = parseInt(document.getElementById('start-hidden').value);
+            const endHidden = parseInt(document.getElementById('end-hidden').value);
+
+            visualizeNetworkSubset(startInput, endInput, startHidden, endHidden);
+        });
+        
+        // Start the simulation loop
+        setInterval(simulate, 130); 
+    </script>
+</body>
+</html>
